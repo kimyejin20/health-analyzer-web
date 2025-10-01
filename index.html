@@ -1,267 +1,472 @@
-import React, { useState, useEffect, useCallback } from 'react';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 헬스케어 식단 분석 시스템</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Malgun Gothic', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#006064',
+                        secondary: '#E0F7FA',
+                        accent: '#FF9800',
+                        danger: '#D32F2F',
+                        success: '#00796B',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 커스텀 스크롤바 스타일링 (선택 사항) */
+        .report-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .report-content::-webkit-scrollbar-thumb {
+            background-color: #00bcd4;
+            border-radius: 10px;
+        }
+        .report-content::-webkit-scrollbar-track {
+            background-color: #e0f7fa;
+        }
+        .page-container {
+            display: none;
+        }
+        .active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
-// Firebase 및 인증 관련 함수는 사용되지 않으므로 제거합니다.
-// Firestore는 데이터 저장이 필요하지 않은 단일 비전 작업이므로 생략합니다.
+    <!-- Header (상단 바) -->
+    <header class="bg-primary shadow-lg p-3 flex justify-between items-center fixed top-0 w-full z-10">
+        <h1 class="text-xl font-bold text-white tracking-wider">AI 식단 분석</h1>
+        <div id="point-display" class="bg-amber-500 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
+            💰 누적 포인트: 0점
+        </div>
+    </header>
 
-// API 키 및 URL 설정
-const apiKey = ""; 
-const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-/**
- * 사용자에게 이미지를 업로드받고, Gemini Vision API를 사용하여
- * 자동으로 음식의 종류와 설명을 인식하여 표시하는 단일 React 컴포넌트입니다.
- */
-const App = () => {
-    // 앱 상태 관리
-    const [selectedImage, setSelectedImage] = useState(null); // base64 이미지 데이터
-    const [recognitionResult, setRecognitionResult] = useState(''); // 인식 결과 텍스트
-    const [isLoading, setIsLoading] = useState(false); // 로딩 상태
-    const [error, setError] = useState(null); // 에러 메시지
-    
-    // 이 컴포넌트에서는 Tailwind CSS를 사용한다고 가정합니다.
-
-    // 파일을 base64로 변환하는 헬퍼 함수
-    const fileToBase64 = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
-    };
-
-    // 이미지 파일 선택 핸들러
-    const handleImageChange = async (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            setRecognitionResult('');
-            setError(null);
+    <!-- Main Content Container -->
+    <main class="flex-grow p-4 mt-16 max-w-lg mx-auto w-full">
+        <!-- ---------------------------------------------------- -->
+        <!-- 1. 질병 선택 화면 (Disease Selection) -->
+        <!-- ---------------------------------------------------- -->
+        <div id="disease-selection-view" class="page-container active bg-white p-6 rounded-xl shadow-2xl border border-primary/20">
+            <h2 class="text-2xl font-extrabold text-primary mb-6 text-center">1. 사용자 질병 정보 선택</h2>
             
-            // 파일 크기 제한 (예: 5MB) - Gemini API는 큰 파일을 처리할 수 있지만, 
-            // 프론트엔드 성능을 위해 적절한 크기를 유지하는 것이 좋습니다.
-            const maxSizeMB = 5;
-            if (file.size > maxSizeMB * 1024 * 1024) {
-                setError(`이미지 파일은 ${maxSizeMB}MB를 초과할 수 없습니다.`);
-                setSelectedImage(null);
-                return;
-            }
+            <p id="selected-disease-display" class="text-center text-xl font-bold text-danger mb-8 border-b-2 pb-2">없음</p>
 
-            try {
-                const base64DataUrl = await fileToBase64(file);
-                // mimeType과 base64 데이터만 추출
-                const [mimeTypePart, dataPart] = base64DataUrl.split(',');
-                const mimeTypeMatch = mimeTypePart.match(/:(.*?);/);
-                
-                if (mimeTypeMatch && dataPart) {
-                    setSelectedImage({
-                        data: dataPart,
-                        mimeType: mimeTypeMatch[1]
-                    });
-                } else {
-                    throw new Error("파일 형식을 파싱할 수 없습니다.");
-                }
-            } catch (err) {
-                setError("이미지 변환 중 오류가 발생했습니다.");
-                setSelectedImage(null);
-            }
-        }
-    };
+            <div id="disease-buttons-container" class="grid grid-cols-2 gap-4">
+                <!-- Buttons will be generated by JavaScript -->
+            </div>
+        </div>
 
-    // 음식 인식 및 설명 요청 함수 (API 호출)
-    const identifyFood = useCallback(async () => {
-        if (!selectedImage) {
-            setError("먼저 이미지를 업로드해주세요.");
-            return;
-        }
+        <!-- ---------------------------------------------------- -->
+        <!-- 2. 음식 사진 입력 시뮬레이션 (Photo Attachment) -->
+        <!-- ---------------------------------------------------- -->
+        <div id="food-input-view" class="page-container bg-white p-6 rounded-xl shadow-2xl border border-primary/20">
+            <h2 class="text-2xl font-extrabold text-primary mb-4 text-center">2. 음식 사진 인식 시뮬레이션</h2>
+            
+            <div class="mb-4 p-3 bg-secondary rounded-lg border border-primary/30">
+                <p class="text-sm text-gray-700">현재 선택된 질병: <span id="current-disease" class="font-bold text-danger"></span></p>
+                <p class="text-sm text-gray-700">AI 인식 가능 음식: <span class="font-bold text-success">샐러드, 양념치킨</span></p>
+            </div>
 
-        setIsLoading(true);
-        setRecognitionResult('');
-        setError(null);
+            <!-- AI 인식 시뮬레이션 입력 -->
+            <div class="mb-6">
+                <label for="food-input" class="block text-md font-semibold text-gray-700 mb-2">
+                    🍽️ 음식 이름 입력 (AI 인식 시뮬레이션)
+                </label>
+                <input type="text" id="food-input" placeholder="예: 샐러드 또는 양념치킨" class="w-full p-3 border-2 border-primary/50 rounded-lg focus:ring-accent focus:border-accent text-lg" value="양념치킨">
+            </div>
 
-        // Exponential Backoff 로직
-        const maxRetries = 3;
-        let attempt = 0;
-        
-        const systemPrompt = "당신은 전문적인 미식 AI 비서입니다. 당신의 임무는 이미지에 보이는 음식을 정확하게 식별하고, 해당 요리에 대한 간결하고 매력적인 설명을 한국어로 제공하는 것입니다. 가능한 주재료와 일반적인 서빙 방식에 대해 언급해 주세요. 이미지를 분석했다는 사실을 언급하지 마세요. 마치 눈앞에 음식을 보고 말하는 것처럼 자신감 있는 어투로 정보를 제시하세요.";
-        const userQuery = "이 음식은 무엇인가요? 식별하고 설명해 주세요.";
+            <!-- 시뮬레이션 결과 및 버튼 -->
+            <div class="mb-8 p-4 bg-gray-100 rounded-lg">
+                <p id="ai-recognition-result" class="text-center text-lg font-bold text-gray-600">AI 인식 결과: [입력 대기중]</p>
+            </div>
 
-        const payload = {
-            contents: [
-                {
-                    role: "user",
-                    parts: [
-                        { text: userQuery },
-                        {
-                            inlineData: {
-                                mimeType: selectedImage.mimeType,
-                                data: selectedImage.data
-                            }
-                        }
-                    ]
-                }
-            ],
-            systemInstruction: {
-                parts: [{ text: systemPrompt }]
+            <div class="flex flex-col space-y-3">
+                <button onclick="analyzeFood()" class="w-full bg-accent hover:bg-amber-600 text-white font-extrabold py-3 rounded-xl shadow-lg transition duration-200">
+                    ➡️ 분석 보고서 확인하기 (AI 분석 실행)
+                </button>
+                <button onclick="showFrame('DiseaseSelectionFrame')" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-xl transition duration-200">
+                    🔙 질병 선택으로 돌아가기
+                </button>
+            </div>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- 3. 분석 결과 화면 (Result Display) -->
+        <!-- ---------------------------------------------------- -->
+        <div id="result-view" class="page-container bg-white p-6 rounded-xl shadow-2xl border border-primary/20">
+            <h2 class="text-2xl font-extrabold text-primary mb-4 text-center">🌟 식단 분석 최종 보고서 🌟</h2>
+            
+            <p id="analysis-summary" class="text-center text-lg font-bold text-success mb-6 p-2 bg-secondary rounded-lg border border-success/30">분석을 시작해주세요</p>
+
+            <div id="report-output" class="bg-gray-50 border border-gray-300 rounded-lg p-4 overflow-y-auto h-[400px] report-content text-sm font-mono whitespace-pre-wrap">
+                상단 버튼을 눌러 분석을 시작하세요.
+            </div>
+
+            <button onclick="showFrame('PhotoAttachmentFrame')" class="w-full mt-6 bg-accent/80 hover:bg-accent text-white font-bold py-3 rounded-xl shadow-lg transition duration-200">
+                🔙 다른 음식 분석하기
+            </button>
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // ====================================================================
+        // 1. 핵심 데이터 정의 (파이썬 파일의 데이터 이식)
+        // ====================================================================
+
+        const DAILY_VALUES = {
+            "kcal": 2000, "나트륨": 2300, "탄수화물": 275, "당분": 50,
+            "지방": 78, "포화지방": 20, "콜레스테롤": 300, "단백질": 50,
+        };
+
+        const FOOD_DB = {
+            "샐러드": {
+                "kcal": 250, "나트륨": 150, "탄수화물": 15, "당분": 5,
+                "지방": 15, "포화지방": 3, "트랜스지방": 0, "콜레스테롤": 10, "단백질": 10
+            },
+            "양념치킨": {
+                "kcal": 1200, "나트륨": 900, "탄수화물": 80, "당분": 35,
+                "지방": 85, "포화지방": 25, "트랜스지방": 0.5, "콜레스테롤": 150, "단백질": 70
             },
         };
 
-        while (attempt < maxRetries) {
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+        // (제한값, 위험 가중치) 튜플을 JS 배열로 변환
+        const DISEASE_RESTRICTIONS_WITH_WEIGHTS = {
+            "고혈압": {"나트륨": [500, 1.5], "지방": [30, 0.8]},
+            "고지혈증": {"콜레스테롤": [100, 1.5], "포화지방": [15, 1.3]},
+            "비만": {"kcal": [600, 1.4], "지방": [40, 1.2]},
+            "제1형 당뇨병": {"탄수화물": [60, 1.4], "당분": [15, 1.2]},
+            "제2형 당뇨병": {"kcal": [550, 1.1], "지방": [35, 1.1], "탄수화물": [70, 1.0], "당분": [25, 1.0]},
+        };
 
-                if (!response.ok) {
-                    // 429 Too Many Requests에 대해서만 재시도
-                    if (response.status === 429 && attempt < maxRetries - 1) {
-                        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        attempt++;
-                        continue;
+        // ====================================================================
+        // 2. 핵심 로직 클래스: 헬스케어 분석기 (파이썬 클래스 이식)
+        // ====================================================================
+
+        class HealthAnalyzer {
+            constructor(userDisease) {
+                this.userDisease = userDisease.trim();
+                this.points = 0;
+                this.feedbackEmoji = "😐 주의 필요";
+                this.recommendation = "특별한 권장 사항이 없습니다.";
+                this.foodTypeClassification = "일반 음식";
+            }
+
+            analyzeMeal(foodName) {
+                const mealData = FOOD_DB[foodName];
+                if (!mealData) return null;
+
+                this.foodTypeClassification = this._classifyFoodType(foodName);
+                const score = this._calculateDiseaseScore(mealData);
+                this._determineFeedbackAndPoints(score, foodName, mealData);
+                const detailedNutrition = this._getDetailedNutritionAnalysis(mealData);
+
+                return {
+                    foodName, disease: this.userDisease, score,
+                    emoji: this.feedbackEmoji, points: this.points, recommendation: this.recommendation,
+                    foodTypeClassification: this.foodTypeClassification, detailedNutrition,
+                };
+            }
+
+            _getDetailedNutritionAnalysis(mealData) {
+                const analysis = {};
+                const nutrientsInfo = [
+                    ["kcal", "열량 (Calories)", "kcal", true], ["나트륨", "나트륨 (Sodium)", "mg", true],
+                    ["탄수화물", "탄수화물 (Carbs)", "g", true], ["당분", "↳ 당류 (Sugars)", "g", true],
+                    ["지방", "지방 (Fat)", "g", true], ["포화지방", "↳ 포화지방 (Sat. Fat)", "g", true],
+                    ["트랜스지방", "↳ 트랜스지방 (Trans Fat)", "g", false], ["콜레스테롤", "콜레스테롤 (Cholesterol)", "mg", true],
+                    ["단백질", "단백질 (Protein)", "g", true],
+                ];
+
+                for (const [key, displayName, unit, calculateDv] of nutrientsInfo) {
+                    const amount = mealData[key] || 0;
+                    let dvPercent = "-";
+                    if (calculateDv && DAILY_VALUES[key] && DAILY_VALUES[key] > 0) {
+                        dvPercent = `${Math.round((amount / DAILY_VALUES[key]) * 100)}%`;
                     }
-                    throw new Error(`API 요청 실패: ${response.statusText}`);
+                    analysis[key] = { displayName, amount: `${Math.round(amount * 10) / 10} ${unit}`, dvPercent };
                 }
+                return analysis;
+            }
 
-                const result = await response.json();
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            _classifyFoodType(foodName) {
+                if (foodName.includes("치킨")) return "⚠️ 고위험군 (고칼로리/고지방)";
+                if (foodName.includes("샐러드")) return "✅ 저위험군 (저칼로리/채소)";
+                return "일반 음식";
+            }
 
-                if (text) {
-                    setRecognitionResult(text);
+            _calculateDiseaseScore(mealData) {
+                let baseScore = 100;
+                let penaltyFactor = 0;
+                const restrictionsWithWeights = DISEASE_RESTRICTIONS_WITH_WEIGHTS[this.userDisease] || {};
+                
+                if (Object.keys(restrictionsWithWeights).length > 0) {
+                    for (const nutrient in restrictionsWithWeights) {
+                        const [limit, weight] = restrictionsWithWeights[nutrient];
+                        const actualValue = mealData[nutrient] || 0;
+                        if (actualValue > limit) {
+                            const exceedRatio = actualValue / limit;
+                            const basePenalty = (exceedRatio - 1) * 20;
+                            const penalty = basePenalty * weight;
+                            penaltyFactor += penalty;
+                        }
+                    }
                 } else {
-                    throw new Error("API에서 유효한 응답 텍스트를 받지 못했습니다.");
+                    if ((mealData["나트륨"] || 0) > 1000 || (mealData["kcal"] || 0) > 1000) {
+                        penaltyFactor += 25;
+                    }
+                }
+                
+                return Math.max(0, parseInt(baseScore - penaltyFactor));
+            }
+
+            _determineFeedbackAndPoints(score, currentFood, mealData) {
+                this.recommendation = this._recommendSimilarHealthyFood(currentFood, mealData);
+                
+                if (score >= 90) {
+                    this.feedbackEmoji = "😃 훌륭합니다! 이 식단을 유지하세요!";
+                    this.points = 10;
+                } else if (score >= 70) {
+                    this.feedbackEmoji = "🙂 양호합니다. 다음 식사 시 나트륨/당분만 줄여보세요.";
+                    this.points = 5;
+                } else if (score >= 50) {
+                    this.feedbackEmoji = "😐 주의 필요. 경고 구간입니다. 대체 식품을 검토하세요.";
+                    this.points = 2;
+                } else {
+                    this.points = 0;
+                    // 질병별 구체적인 경고 메시지 설정 (파이썬 파일의 로직 이식)
+                    if (this.userDisease === "고혈압") {
+                        this.feedbackEmoji = "🚨 나트륨과 포화지방 경보! 혈관 건강에 치명적일 수 있습니다.";
+                    } else if (this.userDisease === "고지혈증") {
+                        this.feedbackEmoji = "🚨 콜레스테롤 및 포화지방 경보! 혈관 건강에 적신호입니다. 즉시 식단 조절이 필요합니다.";
+                    } else if (this.userDisease === "제1형 당뇨병") {
+                        this.feedbackEmoji = "🩸 인슐린 관리 비상! 탄수화물/당분이 치명적일 수 있습니다.";
+                    } else if (this.userDisease === "제2형 당뇨병") {
+                        this.feedbackEmoji = "🩸 대사 위기 경고! 과도한 칼로리와 지방은 혈당 스파이크의 원인입니다.";
+                    } else if (this.userDisease === "비만") {
+                        this.feedbackEmoji = "🏃‍♂️ 칼로리 초과 경보! 이 음식은 다이어트의 '레드카드'입니다.";
+                    } else {
+                        this.feedbackEmoji = "😢 위험! 다음 식사는 반드시 추천 메뉴로 대체하세요!";
+                    }
+                }
+            }
+                
+            _recommendSimilarHealthyFood(currentFood, mealData) {
+                const disease = this.userDisease;
+                
+                if (currentFood === "양념치킨") {
+                    const reasons = [];
+                    if (disease.includes("고혈압")) {
+                        const sodium = mealData["나트륨"] || 0;
+                        reasons.push(`나트륨(${sodium}mg)이 매우 높습니다.`);
+                        return `🍗 대체 권고: ${reasons.join(', ')} 양념을 닦아내거나 저염 닭가슴살 샐러드로 대체하세요.`;
+                    }
+                    
+                    if (disease.includes("당뇨병") || disease.includes("비만")) {
+                        const sugar = mealData["당분"] || 0;
+                        const fat = mealData["지방"] || 0;
+                        reasons.push(`당분(${sugar}g)과 지방(${fat}g) 함량이 높습니다.`);
+                        return `🍗 대체 권고: ${reasons.join(', ')} 양념 없는 구운 닭가슴살을 드세요.`;
+                    }
+                    
+                    if (disease.includes("고지혈증")) {
+                        const cholesterol = mealData["콜레스테롤"] || 0;
+                        const satFat = mealData["포화지방"] || 0;
+                        reasons.push(`콜레스테롤(${cholesterol}mg)과 포화지방(${satFat}g)이 기준치를 크게 초과합니다.`);
+                        return `🍗 대체 권고: ${reasons.join(', ')} 튀김 대신 구운 닭가슴살을 섭취하고, 지방이 많은 껍질은 제거하는 것이 좋습니다.`;
+                    }
                 }
 
-                break; // 성공 시 루프 종료
-
-            } catch (err) {
-                if (attempt === maxRetries - 1) {
-                    console.error("최종 API 호출 오류:", err);
-                    setError("음식 인식에 실패했습니다. 이미지가 명확한지 확인하고 다시 시도해 주세요.");
+                if (currentFood === "샐러드") {
+                    const sodium = mealData["나트륨"] || 0;
+                    if (sodium > 200) {
+                        return `⚠️ 샐러드 드레싱 양을 줄여 나트륨(${sodium}mg) 섭취를 조절해주세요.`;
+                    }
+                    return "특별한 대체 권고 사항은 없습니다. 훌륭합니다!";
                 }
-                attempt++;
+                    
+                return "양 조절을 권장합니다.";
             }
         }
-        setIsLoading(false);
-    }, [selectedImage]);
 
 
-    // UI 렌더링
-    return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 sm:p-8 font-['Inter']">
-            {/* 불필요한 Warning을 유발하는 <style jsx global> 태그를 제거했습니다. 
-                Tailwind CSS는 <script> 태그를 통해 로드하며, 폰트 클래스는 최상위 div에 적용되어 있습니다. */}
-            <script src="https://cdn.tailwindcss.com"></script>
+        // ====================================================================
+        // 3. UI 및 상태 관리
+        // ====================================================================
 
-            {/* 헤더 */}
-            <header className="w-full max-w-4xl text-center mb-8">
-                <h1 className="text-4xl font-extrabold text-indigo-700 mb-2">
-                    AI 푸드 마스터
-                </h1>
-                <p className="text-gray-600 text-lg">
-                    이미지를 업로드하면, AI가 자동으로 음식을 인식하고 설명해 드립니다.
-                </p>
-                <div className="w-24 h-1 bg-indigo-500 mx-auto mt-3 rounded-full"></div>
-            </header>
+        let totalPoints = 0;
+        let selectedDisease = '없음';
+        let aiRecognizedFood = '';
 
-            {/* 메인 컨테이너 */}
-            <main className="w-full max-w-4xl bg-white p-6 sm:p-10 rounded-2xl shadow-xl border border-gray-100">
+        const diseaseNames = ["고혈압", "고지혈증", "제1형 당뇨병", "제2형 당뇨병", "비만", "없음"];
+        
+        /** 페이지 전환 */
+        function showFrame(frameId) {
+            document.querySelectorAll('.page-container').forEach(el => el.classList.remove('active'));
+            const frame = document.getElementById(frameId.toLowerCase().replace('frame', '-view'));
+            if (frame) {
+                frame.classList.add('active');
+                if (frameId === 'PhotoAttachmentFrame') {
+                    // PhotoAttachmentFrame으로 이동 시 현재 선택된 질병 표시 업데이트
+                    document.getElementById('current-disease').textContent = selectedDisease;
+                } else if (frameId === 'ResultDisplayFrame') {
+                    // ResultDisplayFrame으로 이동 시 초기 텍스트 설정
+                    const foodName = aiRecognizedFood;
+                    const disease = selectedDisease;
+                    document.getElementById('analysis-summary').textContent = foodName && FOOD_DB[foodName] 
+                        ? `분석 대기: ${foodName} / 질병: ${disease}` 
+                        : `분석 데이터 없음. 이전 페이지로 돌아가세요.`;
+                    document.getElementById('report-output').textContent = "상단 버튼을 눌러 분석을 시작하세요.\n\n분석 후 이 영역에 상세 보고서가 나타납니다.";
+                }
+            }
+        }
 
-                {/* 이미지 업로드 영역 */}
-                <div className="mb-8">
-                    <label 
-                        htmlFor="file-upload" 
-                        className="block text-sm font-medium text-gray-700 mb-3"
-                    >
-                        1. 음식 사진을 선택하세요 (PNG 또는 JPG)
-                    </label>
-                    <input
-                        id="file-upload"
-                        type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={handleImageChange}
-                        className="block w-full text-sm text-gray-500
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-full file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-indigo-50 file:text-indigo-700
-                            hover:file:bg-indigo-100 cursor-pointer"
-                        disabled={isLoading}
-                    />
-                </div>
+        /** 질병 선택 핸들러 */
+        function selectDisease(disease) {
+            selectedDisease = disease;
+            document.getElementById('selected-disease-display').textContent = disease;
+            // 알림 대신 시각적 피드백과 함께 다음 페이지로 이동
+            setTimeout(() => {
+                showFrame('PhotoAttachmentFrame');
+            }, 300);
+        }
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* 이미지 미리보기 */}
-                    <div className="relative p-4 border-2 border-dashed border-gray-300 rounded-xl min-h-[300px] flex flex-col justify-center items-center bg-gray-50">
-                        <h2 className="text-xl font-semibold text-gray-700 mb-4">
-                            업로드된 이미지
-                        </h2>
-                        {selectedImage ? (
-                            <img
-                                src={`data:${selectedImage.mimeType};base64,${selectedImage.data}`}
-                                alt="업로드된 음식 이미지"
-                                className="max-h-96 w-full object-contain rounded-lg shadow-md"
-                            />
-                        ) : (
-                            <p className="text-gray-500 italic p-10">
-                                여기에 선택한 이미지가 표시됩니다.
-                            </p>
-                        )}
-                    </div>
+        /** 음식 분석 실행 */
+        function analyzeFood() {
+            const foodInput = document.getElementById('food-input').value.trim();
+            aiRecognizedFood = foodInput;
+            
+            const recognitionLabel = document.getElementById('ai-recognition-result');
 
-                    {/* 인식 결과 영역 */}
-                    <div className="p-4 bg-indigo-50 rounded-xl shadow-inner min-h-[300px] flex flex-col">
-                        <h2 className="text-xl font-semibold text-indigo-700 mb-4 flex items-center">
-                            2. AI 인식 결과
-                        </h2>
-                        
-                        {/* 인식 버튼 */}
-                        <button
-                            onClick={identifyFood}
-                            disabled={!selectedImage || isLoading}
-                            className={`w-full py-3 px-6 mb-4 text-white font-bold rounded-full transition duration-200 shadow-lg 
-                                ${!selectedImage || isLoading 
-                                    ? 'bg-gray-400 cursor-not-allowed' 
-                                    : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transform hover:scale-[1.01]'}
-                            `}
-                        >
-                            {isLoading ? '인식 중...' : '💡 음식 자동 인식 시작'}
-                        </button>
-                        
-                        {/* 로딩/에러/결과 메시지 */}
-                        {error && (
-                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-4" role="alert">
-                                <span className="block sm:inline">{error}</span>
-                            </div>
-                        )}
+            if (!aiRecognizedFood || !FOOD_DB[aiRecognizedFood]) {
+                recognitionLabel.className = 'text-center text-lg font-bold text-danger';
+                if (!aiRecognizedFood) {
+                    recognitionLabel.textContent = 'AI 인식 결과: [음식을 입력해주세요]';
+                } else {
+                    recognitionLabel.textContent = `AI 인식 결과: ${aiRecognizedFood} (DB 미확인)`;
+                }
+                return;
+            }
 
-                        {isLoading && (
-                            <div className="flex justify-center items-center h-full">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                                <p className="ml-4 text-indigo-600 font-medium">AI가 메뉴를 신중하게 분석 중입니다...</p>
-                            </div>
-                        )}
+            recognitionLabel.textContent = `AI 인식 결과: ${aiRecognizedFood} (인식 완료)`;
+            recognitionLabel.className = 'text-center text-lg font-bold text-success';
+            
+            showFrame('ResultDisplayFrame');
 
-                        {!isLoading && recognitionResult && (
-                            <div className="flex-1 bg-white p-6 rounded-lg shadow-md overflow-y-auto">
-                                <div className="text-gray-800 whitespace-pre-wrap">
-                                    <h3 className="text-2xl font-bold text-green-600 mb-3">식별 성공!</h3>
-                                    {recognitionResult}
-                                </div>
-                            </div>
-                        )}
+            // 바로 분석 시작 로직 호출
+            _analyzeAndDisplay();
+        }
 
-                        {!selectedImage && !isLoading && !error && !recognitionResult && (
-                             <p className="text-gray-500 italic text-center py-10">
-                                이미지를 업로드하고 버튼을 눌러주세요.
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </main>
-        </div>
-    );
-};
+        /** 분석 실행 및 결과 표시 (파이썬 _analyze_and_display 함수 이식) */
+        function _analyzeAndDisplay() {
+            const disease = selectedDisease;
+            const foodName = aiRecognizedFood;
 
-export default App;
+            if (!foodName || !FOOD_DB[foodName]) {
+                // 경고 대신 사용자 정의 UI를 사용하는 것이 좋지만, 현재 코드 구조상 그대로 둡니다.
+                // alert("분석 오류: DB에 없는 음식이거나 음식이 인식되지 않았습니다."); 
+                console.error("분석 오류: DB에 없는 음식이거나 음식이 인식되지 않았습니다.");
+                return;
+            }
+
+            const analyzer = new HealthAnalyzer(disease);
+            const analysisResult = analyzer.analyzeMeal(foodName);
+
+            if (!analysisResult) {
+                // alert(`분석 불가: '${foodName}'에 대한 정보를 찾을 수 없습니다.`);
+                console.error(`분석 불가: '${foodName}'에 대한 정보를 찾을 수 없습니다.`);
+                return;
+            }
+
+            const pointsEarned = analysisResult.points;
+            totalPoints += pointsEarned;
+            updatePointsDisplay();
+
+            _displayReportContent(analysisResult);
+            // 사용자에게 피드백 제공
+            console.log(`분석 완료: ${pointsEarned}점 획득!`);
+        }
+
+        /** 보고서 내용 표시 (파이썬 _display_report_content 함수 이식) */
+        function _displayReportContent(res) {
+            document.getElementById('analysis-summary').textContent = `분석 완료: ${res.foodName} / 질병: ${res.disease}`;
+            document.getElementById('analysis-summary').className = 'text-center text-lg font-bold text-success mb-6 p-2 bg-green-100 rounded-lg border border-success/30';
+            
+            let output = `
+[ AI 음식 분류 결과 ]
+ > ${res.foodTypeClassification}
+
+[ 사용자 정보 ]
+ > 환자 질병: ${res.disease !== '없음' ? res.disease : '해당 없음'}
+ > AI 인식 음식: ${res.foodName}
+
+[ AI 정밀 분석 결과 ]
+ > ⭐️ 적합성 점수: ${res.score}점 (가중치 반영)
+ > 🙂 감성 피드백: ${res.emoji}
+ > 💰 획득 포인트: +${res.points}점
+
+==================================================
+ 📝 영양 정보 상세 분석 (1인분 기준)
+==================================================
+${'영양성분'.padEnd(16)}|${'함량'.padStart(18)}|${'비율(%DV)'.padStart(10)}
+--------------------------------------------------
+`;
+            const dtNutr = res.detailedNutrition;
+            const nutrientOrder = ["kcal", "나트륨", "탄수화물", "당분", "지방", "포화지방", "트랜스지방", "콜레스테롤", "단백질"];
+
+            for (const key of nutrientOrder) {
+                if (dtNutr[key]) {
+                    const item = dtNutr[key];
+                    const name = item.displayName.padEnd(15);
+                    const amount = item.amount.padStart(18);
+                    const dv = item.dvPercent.padStart(10);
+                    output += `${name}|${amount}|${dv}\n`;
+                }
+            }
+            
+            output += "--------------------------------------------------\n\n";
+            output += `[ 맞춤형 제안 ]
+ > ${res.recommendation}
+`;
+            
+            document.getElementById('report-output').textContent = output;
+        }
+
+
+        /** 포인트 표시 업데이트 */
+        function updatePointsDisplay() {
+            document.getElementById('point-display').textContent = `💰 누적 포인트: ${totalPoints}점`;
+        }
+
+        /** 초기화 및 이벤트 리스너 설정 */
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('disease-buttons-container');
+            diseaseNames.forEach(disease => {
+                const button = document.createElement('button');
+                button.textContent = disease;
+                button.className = 'bg-blue-100 hover:bg-blue-200 text-primary font-bold py-3 rounded-lg shadow transition duration-150';
+                button.onclick = () => selectDisease(disease);
+                container.appendChild(button);
+            });
+            
+            // 초기 페이지 표시
+            showFrame('DiseaseSelectionFrame');
+        });
+
+    </script>
+</body>
+</html>
